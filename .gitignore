@@ -1,0 +1,11 @@
+samples/
+# model_saves/
+*.ipynb
+# Byte-compiled / optimized / DLL files
+**/__pycache__
+*.py[cod]
+*.pkl
+
+.idea/
+
+graphs/
