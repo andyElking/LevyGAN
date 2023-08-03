@@ -1,5 +1,5 @@
 samples/
-# model_saves/
+model_saves/
 *.ipynb
 # Byte-compiled / optimized / DLL files
 **/__pycache__
