@@ -11,6 +11,12 @@ To install the required packages, run the following:
 ```console
 pip install -r requirements.txt
 ```
+
+In order to use the provided testing functionality, please also download the Levy area sample dataset from the link below and copy them into LevyGAN/samples/.
+
+https://drive.google.com/drive/folders/1GZ0MY_9BMeg6Tkcu5BrHeENDBn1TGPjM?usp=sharing
+
+
 ## The LevyGAN Object
 The `LevyGAN.py` file contains the base class `LevyGAN`. Only the dimension of Brownian motion to be used for training and testing needs to be provided. The `LevyGAN` object has four main attributes which are initialised separately:
 
