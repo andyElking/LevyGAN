@@ -9,7 +9,8 @@ import ot
 from math import sqrt
 from torch.distributions import Bernoulli
 
-def chen_combine(bm_levy_in: torch.Tensor, _bm_dim: int, uniform_s: bool = False):
+
+def chen_combine(bm_levy_in: torch.Tensor, _bm_dim: int, uniform_s: bool = False, chunking: bool = False):
     """Given two samples and bm and their levy areas, performs Chen's identity: A_[0,1]^ij = A_[0,1/2]^ij + A_[1/2,1]^ij + (1/2)*(W_[0,1/2]^iW_[1/2,1]^j - W_[0,1/2]^jW_[1/2,1]^i). Input increments and levy areas are assumed to be over [0, 1], so Brownian rescaling is applied so inputs are over [0,1/2].
 
     Args:
@@ -28,8 +29,11 @@ def chen_combine(bm_levy_in: torch.Tensor, _bm_dim: int, uniform_s: bool = False
 
     start_time = default_timer()
     bm_strided = bm_levy_in.view(out_size, 2, bm_levy_in.shape[1])
-    wl_0_s = bm_strided[:, 0]
-    wl_s_t = bm_strided[:, 1]
+    if chunking:
+        wl_0_s, wl_s_t = bm_levy_in.chunk(2)
+    else:
+        wl_0_s = bm_strided[:, 0]
+        wl_s_t = bm_strided[:, 1]
 
     if uniform_s:
         s = torch.rand(wl_0_s.shape[0], 1).to(wl_0_s.device)
@@ -70,6 +74,7 @@ def chen_combine(bm_levy_in: torch.Tensor, _bm_dim: int, uniform_s: bool = False
 
     return result
 
+
 def MC_chen_combine(bm_levy_in_: np.array, bm_dim: int):
     """Takes in samples in shape for MC simulation. Reshapes, performs Chen combine pairwise then reshapes back to MC shape.
 
@@ -79,15 +84,15 @@ def MC_chen_combine(bm_levy_in_: np.array, bm_dim: int):
     """
     # Reshape to perform chen combine
     M, N, _ = bm_levy_in_.shape
-    bm_levy_in = bm_levy_in_.view(M*N, -1)
+    bm_levy_in = bm_levy_in_.view(M * N, -1)
     bm_levy_out = chen_combine(bm_levy_in, bm_dim)
     # Undo scaling from chen_combine
     bm_levy_out[:, :bm_dim] *= sqrt(2)
     bm_levy_out[:, bm_dim:] *= 2
     # Reshape back to MC shape
-    bm_levy_out_ = bm_levy_out.view(M, N//2, -1)
+    bm_levy_out_ = bm_levy_out.view(M, N // 2, -1)
     return bm_levy_out_
-    
+
 
 def levy_conditional_st_dev(_bm: list, T=1):
     """Computes the the conditional standard deviation of levy area give bm
@@ -132,6 +137,7 @@ def empirical_second_moments(_levy_generated: np.ndarray):
                 result[j, i] = result[i, j]
 
     return result
+
 
 def joint_wass_dist(x1: torch.Tensor, x2: torch.Tensor, numItermax=1e06):
     """Returns the joint Wasserstein2 distance between two samples
@@ -194,6 +200,7 @@ def list_pairs(_bm_dim: int, _bm=None):
 
 # All pairs of increments for bm between dimension 0 and 9
 pair_lists = [list_pairs(wd) for wd in range(10)]
+
 
 def mom4_gpu(bm_dim: int, batch_size: int, bm_in: torch.Tensor = None, k_in: torch.Tensor = None,
              h_in: torch.Tensor = None, device_to_use: torch.device = None):
@@ -358,6 +365,7 @@ def Davie_gpu(bm_in: torch.Tensor, device, h_in: torch.Tensor = None, bb: torch.
 
     return BMH + bb
 
+
 def Davie_gpu_all(_bm_dim: int, _batch_size: int):
     """
     Performs bridge flipping but directly with Rad RVs (not with all sign combinations)
@@ -371,7 +379,7 @@ def Davie_gpu_all(_bm_dim: int, _batch_size: int):
     Returns:
         torch.Tensor: (bm_in, Levy area)
     """
-    
+
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     bm_in = torch.randn((_batch_size, _bm_dim), dtype=torch.float, device=device)
     bm_dim = bm_in.shape[1]
@@ -392,6 +400,7 @@ def Davie_gpu_all(_bm_dim: int, _batch_size: int):
 
     return torch.cat([bm_in, BMH + bb], dim=1)
 
+
 def rademacher_GPU_dim2(_batch_size: int):
     """Returns brownian increments and rademacher random variables matching the conditional variance of levy area given the brownian increment.
 
@@ -401,17 +410,17 @@ def rademacher_GPU_dim2(_batch_size: int):
     Returns:
         torch.tensor: brownian increments and levy areas
     """
-    
+
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     bm_in = torch.randn((_batch_size, 2), dtype=torch.float, device=device)
-    std = torch.sqrt(1/12 + (1/12)*(bm_in[:, 0]**2 + bm_in[:, 1]**2)).view(_batch_size, -1)
+    std = torch.sqrt(1 / 12 + (1 / 12) * (bm_in[:, 0] ** 2 + bm_in[:, 1] ** 2)).view(_batch_size, -1)
     area_ = 2 * (Bernoulli(torch.tensor([0.5])).sample((_batch_size,)) - 0.5).to(device)
-    area = std*area_
+    area = std * area_
 
     return torch.cat([bm_in, area], dim=1)
 
+
 def rademacher_GPU_dim2_var(_batch_size: int):
-    
     """Returns brownian increments and independent rademacher random variables matching the variance of levy area
 
     Returns:
@@ -419,9 +428,9 @@ def rademacher_GPU_dim2_var(_batch_size: int):
     """
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     bm_in = torch.randn((_batch_size, 2), dtype=torch.float, device=device)
-    std = torch.tensor(1/2).to(device)
+    std = torch.tensor(1 / 2).to(device)
     area_ = 2 * (Bernoulli(torch.tensor([0.5])).sample((_batch_size,)) - 0.5).to(device)
-    area = std*area_
+    area = std * area_
 
     return torch.cat([bm_in, area], dim=1)
 
@@ -516,6 +525,7 @@ def read_serial_number(dict_saves_folder):
             serial_num = int(last_line.split()[0]) + 1
     return serial_num
 
+
 def fast_flipping(bm_in: torch.Tensor, bb_in: torch.Tensor, h_in: torch.Tensor, device, r_in=None, T_in=None):
     """
     Performs bridge flipping but directly with Rad RVs (not with all sign combinations)
@@ -549,6 +559,7 @@ def fast_flipping(bm_in: torch.Tensor, bb_in: torch.Tensor, h_in: torch.Tensor, 
     Mbb = M * bb_in
 
     return BMH + Mbb
+
 
 def poly_expansion_bb(h_in: torch.Tensor, num_terms: int = 2, precision: float = None, max_mem_alloc=512,
                       gen_bb=True, bm_in=None):
@@ -588,7 +599,7 @@ def poly_expansion_bb(h_in: torch.Tensor, num_terms: int = 2, precision: float =
         if i == num_chunks - 1 and num_terms % chunk_len > 0:  # last chunk is shorter
             chunk_len = num_terms % chunk_len
             even_ks = even_ks[:chunk_len]
-            odd_ks = odd_ks[:chunk_len-1]  # this one is shorter
+            odd_ks = odd_ks[:chunk_len - 1]  # this one is shorter
         even_cs = torch.randn((chunk_len, bsz, bm_dim), dtype=torch.float, device=h_in.device)
         even_cs = even_cs * torch.pow(1 + 2 * even_ks.view(-1, 1, 1), exponent=-0.5)
 
@@ -630,6 +641,5 @@ def poly_expansion_bb(h_in: torch.Tensor, num_terms: int = 2, precision: float =
             bm_in = torch.randn((bsz, bm_dim), dtype=torch.float, device=h_in.device)
 
         res = Davie_gpu(bm_in, device=h_in.device, h_in=h_in, bb=res)
-
 
     return res

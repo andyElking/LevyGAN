@@ -15,6 +15,8 @@ from src.train.LevyGAN_tester import LevyGAN_Tester
 
 """The trainer class consists of a parent class, the BaseTrainer, and two derived classes. One is CF_Trainer, which trains the using the true joint characteristic function as the loss. The other is UCF_trainer, that trains using the unitary characeristic function combined with Chen training.
 """
+
+
 def get_trainer(trainer_conf: dict):
     """Selects either CF_trainer or UCF_trainer
     """
@@ -47,16 +49,15 @@ class BaseTrainer:
         self.start_time = timeit.default_timer()
         self.print_reports = conf['print_reports'] if 'print_reports' in conf else True
 
-
     def step_fit(self, iters, generator, opt_g, discriminator, opt_d, test_results):
         raise NotImplementedError
-
 
 
 class CF_Trainer(BaseTrainer):
     """
     Derived class of the trainer, where training uses the analytical joint characteristic function as well as chen training
     """
+
     def __init__(self, trainer_conf: dict = None):
         super(CF_Trainer, self).__init__(trainer_conf)
 
@@ -65,7 +66,7 @@ class CF_Trainer(BaseTrainer):
             self.chen_penalty_alpha = trainer_conf['chen_penalty_alpha']
         else:
             self.chen_penalty_alpha = 1.
-    
+
     def generator_fit(self, generator, opt_g, discriminator):
         """Updates the generator
         """
@@ -76,26 +77,26 @@ class CF_Trainer(BaseTrainer):
         fake_data = generator.forward(bm_increment)
         # Generate another sample of twice the batch size for Chen training
         with torch.no_grad():
-            bm_increment = torch.randn((2*self.training_bsz, self.bm_dim), dtype=torch.float, device=self.device)
+            bm_increment = torch.randn((2 * self.training_bsz, self.bm_dim), dtype=torch.float, device=self.device)
             fake_data_detached = generator.forward(bm_increment).detach()
         # Perform one iteration of chen combine
         fake_data_chen = chen_combine(fake_data_detached, self.bm_dim)
         # Compute the loss using the joint characteristic function and the Chen loss
         loss_true = discriminator.true_char_diff(fake_data)
-        loss_chen = discriminator.empirical_char_diff(fake_data, fake_data_chen, just_real_1 = True)
+        loss_chen = discriminator.empirical_char_diff(fake_data, fake_data_chen, just_real_1=True)
         loss_g = loss_true + self.chen_penalty_alpha * loss_chen
         # Update step
         (loss_g).backward()
         opt_g.step()
 
         return fake_data, fake_data_chen, loss_g
-    
+
     def discriminator_fit(self, discriminator, opt_d, fake_data, fake_data_chen):
         """Upates the discriminator
 
         Args:
-            discriminator : 
-            opt_d : 
+            discriminator :
+            opt_d :
             fake_data (torch.tensor): sample from the generator
             fake_data_chen (torch.tensor): independent sample of Chen-combined data from the generator
         """
@@ -106,13 +107,13 @@ class CF_Trainer(BaseTrainer):
         # Compute CF loss and chen loss
         loss_d_true = discriminator.true_char_diff(fake_data_detached)
         loss_d_chen = discriminator.empirical_char_diff(fake_data_detached,
-                                                    fake_data_chen_detached, just_real_1 = True)
+                                                        fake_data_chen_detached, just_real_1=True)
         loss_d = loss_d_true + self.chen_penalty_alpha * loss_d_chen
         # Update step
         (-loss_d).backward()
         opt_d.step()
         return
-    
+
     def step_fit(self, iters, generator, opt_g, discriminator, opt_d, test_results):
         """
         Updates the generator and discriminator with the correct frequency
@@ -131,9 +132,10 @@ class CF_Trainer(BaseTrainer):
             for discr_iter in range(-self.num_discr_iters):
                 self.discriminator_fit(discriminator, opt_d, fake_data, fake_data_chen)
         test_results['loss d'] = [loss_g.detach().item()]
-        
+
         return loss_g
-    
+
+
 class UCF_Trainer(BaseTrainer):
     """
     Derived class of the trainer, where training uses the unitary characteristic function for chen training
@@ -158,10 +160,10 @@ class UCF_Trainer(BaseTrainer):
         fake_data = generator.forward(bm_increment)
         # Generate another sample of twice the batch size for Chen training
         with torch.no_grad():
-            bm_increment = torch.randn((2*self.training_bsz, self.bm_dim), dtype=torch.float, device=self.device)
+            bm_increment = torch.randn((2 * self.training_bsz, self.bm_dim), dtype=torch.float, device=self.device)
             fake_data_detached = generator.forward(bm_increment).detach()
         # Perform one iteration of chen combine
-        fake_data_chen = chen_combine(fake_data_detached, self.bm_dim)
+        fake_data_chen = chen_combine(fake_data_detached, self.bm_dim, chunking=True)
         # Compute Chen loss
         loss_g = discriminator.empirical_char_diff(fake_data, fake_data_chen)
         # Update step
@@ -173,8 +175,8 @@ class UCF_Trainer(BaseTrainer):
     def discriminator_fit(self, discriminator, opt_d, fake_data, fake_data_chen):
         """Upates the discriminator
         Args:
-            discriminator : 
-            opt_d : 
+            discriminator :
+            opt_d :
             fake_data (torch.tensor): sample from the generator
             fake_data_chen (torch.tensor): independent sample of Chen-combined data from the generator
         """
@@ -207,9 +209,10 @@ class UCF_Trainer(BaseTrainer):
             for discr_iter in range(-self.num_discr_iters):
                 self.discriminator_fit(discriminator, opt_d, fake_data, fake_data_chen)
         test_results['loss d'] = [loss_g.detach().item()]
-        
+
         return loss_g
-    
+
+
 TRAINER = {'base': BaseTrainer,
            'ucf': UCF_Trainer,
            'cf': CF_Trainer

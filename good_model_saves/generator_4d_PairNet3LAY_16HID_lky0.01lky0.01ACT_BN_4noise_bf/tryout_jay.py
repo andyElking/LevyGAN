@@ -27,7 +27,7 @@ def main(config):
 
     training_config = {
         'bm_dim': 4,
-        'trainer_type': 'pcf',
+        'trainer_type': 'ucf',
         'num_iters': 2500,  # for Chen training and CF training
         'optimizer': 'Adam',
         'lrG': 0.000008,
@@ -43,23 +43,8 @@ def main(config):
         'chen_penalty_alpha': 0.01,  # The coefficient for chen training (only relevant for Rotational_inv_LevyGAN)
         'rotation_penalty_alpha': 1.,  # The coefficient for rotation training(only relevant for Rotational_inv_LevyGAN)
         'antisym_mult': 0.,  # The multiplier for antisymmetric penalty (only relevant for PairNet Generator)
-        # 'custom_lrs': {  # for Chen training and CF training
-        #     1000: (0.000008, 0.0001),
-        #     2000: (0.000001, 0.0001),
-        #     4000: (0.00001, 0.00005),
-        # },
-        # 'custom_lrs': {  # for Chen training and CF training
-        #     0: (0.001, 0.01),
-        #     # 200: (0.000008, 0.0001),
-        #     # 400: (0.0000008, 0.00001),
-        #     1000: (0.0001, 0.001),
-        #     1500: (0.00001, 0.0001),
-        #     # 4000: (0.00001, 0.00005),
-        # },
         'custom_lrs': {  # for Chen training and CF training
             0: (0.001, 0.01),
-            # 200: (0.000008, 0.0001),
-            # 400: (0.0000008, 0.00001),
             1000: (0.0001, 0.001),
             1500: (0.00001, 0.0001),
             2000: (0.000008, 0.0001),
@@ -90,8 +75,7 @@ def main(config):
     discr_config = {
         'bm_dim': 4,
         'CF_Discr_hidden_dim': 10,
-        'discr_type': "path_characteristic",
-        # "grid_characteristic", 'gaussian_characteristic', 'iid_gaussian_characteristic', 'embedded_characteristic', 'path_characteristic'
+        'discr_type': "u_characteristic",
         'discr_measure': "Gaussian",  # "Gaussian", 'Cauchy'
         'coeff_batch': 128,
         'lie_degree': 3,
@@ -118,12 +102,6 @@ def main(config):
 
     levy_gan.init_tester(tester_config)
 
-    descriptor = f"{training_config['chen_penalty_alpha']}ALPHA_{gen_config['noise_size']}NSZ_{discr_config['coeff_batch']}_DIS_BATCH_{discr_config['lie_degree']}_LIE_seed_{3407}_{levy_gan.generator.net_description}"
-    print(descriptor)
-    description = 'embedded_chen_penalty_alpha_1_rotation_penalty_alpha_1_seed_3409_8NSZ_PairNet3LAY_64HID_lky0.2lky0.2ACT_BN_best_4mom'
-    description = 'embedded_chen_penalty_alpha_1.0_rotation_penalty_alpha_1.0_seed_3408_4NSZ_PairNet3LAY_16HID_lky0.2lky0.2ACT_BN_best_4mom'
-    discr_description = 'embedded_chen_penalty_alpha_0.1_rotation_penalty_alpha_0.1_seed_3431_8NSZ_PairNet3LAY_64HID_lky0.2lky0.2ACT_BN_best__scr'
-
     init_seed = 3407
     for seed in range(1):
         random_seed = init_seed + seed
@@ -133,14 +111,7 @@ def main(config):
         levy_gan.init_discriminator(discr_config)
         levy_gan.init_generator(gen_config)
         levy_gan.tester.reset_test_results()
-        # levy_gan.discriminator = get_discriminator(discr_config)
-        # levy_gan.discriminator.load_dict(3, discr_description)
-        # generator = PairNetGenerator(gen_conf=gen_config)
-        # levy_gan.generator.load_dict(1,description)
-        # from src.model.network import Embedding_layer
-        # embedding = Embedding_layer(10)
-        # levy_gan.trainer.embedding_model = embedding.to(levy_gan.device)
-        # levy_gan.generator = generator
+
         descriptor = f"embedded_chen_penalty_alpha_{training_config['chen_penalty_alpha']}" \
                      f"_rotation_penalty_alpha_{training_config['rotation_penalty_alpha']}" \
                      f"_seed_{random_seed}_{gen_config['noise_size']}" \
@@ -150,40 +121,7 @@ def main(config):
 
         levy_gan.fit(save_models=True)
         print(f"best score report: {levy_gan.tester.test_results['best score report']}", random_seed)
-        # print(levy_gan.discriminator.levy_logvar)
-        # if not res:
-        #     res = trainer.test_results['best score']
-        #     print(res)
-        # else:
-        #     print(res)
-        #     res = min(res, trainer.test_results['best score'])
 
-
-def test():
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    gen_config = {
-        'bm_dim': 3,
-        'noise_size': 8,  # size of latent space
-        'num_layers': 3,
-        'hidden_dim': 16,
-        'activation': ('leaky', 0.01),  # or 'relu'
-        'batch_norm': True,
-        'do_bridge_flipping': True,  # "bridge_flipping", otherwise off
-        'gen_dict_saving_on': True
-    }
-
-    generator = Generator(config=gen_config)
-    generator.load_state_dict(torch.load(
-        './model_saves/generator_3d_net3LAY_16HID_lky0.01ACT_BN_8noise_bf/gen_num1_seed_3409_8NSZ_3LAY_16HID_lky0.01ACT_BN_max_scr.pt'))
-    generator.to(device)
-
-    # x_real = torch.tensor(np.genfromtxt(f"samples/fixed_samples_{3}-dim{1}.csv", dtype=float, delimiter=',')).to(dtype=torch.float, device=device)
-    x_real = torch.tensor(np.genfromtxt(f"samples/samples_{3}-dim.csv", dtype=float, delimiter=',')).to(
-        dtype=torch.float, device=device)
-    levy_real = x_real[:, gen_config['bm_dim']:]
-
-    x_fake = generator.sample_fake_data(x_real[:, :gen_config['bm_dim']])
 
 if __name__ == '__main__':
-    # test()
     main(configs)

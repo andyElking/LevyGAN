@@ -14,7 +14,7 @@ from src.model.network import create_net
 
 
 def get_generator(gen_conf: dict):
-        return PairNetGenerator(gen_conf)
+    return PairNetGenerator(gen_conf)
 
 
 class Generator(nn.Module):
@@ -108,7 +108,7 @@ class Generator(nn.Module):
 
         folder_name = f'model_saves/{self.dict_saves_folder}/'
         torch.save(params, folder_name + f'gen_num{self._serial_num}_{descriptor}.pt')
-    
+
     def netG_from_layer_list(self):
         raise NotImplementedError
 
@@ -118,7 +118,7 @@ class Generator(nn.Module):
     def forward(self, input):
         raise NotImplementedError
 
-    def sample_fake_data(self, input, bb_from_h = False):
+    def sample_fake_data(self, input, bb_from_h=False):
         """Sample from generator in eval mode
         """
         self.eval()
@@ -132,6 +132,7 @@ class Generator(nn.Module):
 
     def generate_bb(self, bsz: int = 1, h_in: torch.Tensor = None, concat_hb=True):
         raise NotImplementedError
+
 
 class PairNetGenerator(Generator):
     def __init__(self, gen_conf):
@@ -154,17 +155,18 @@ class PairNetGenerator(Generator):
         transforms = [SigmoidTransform().inv, AffineTransform(loc=0, scale=logi_scale)]
         logistic_dist = TransformedDistribution(uni_dist, transforms)
         self.distros = {
-            'ber': Bernoulli(probs=0.5*one),
+            'ber': Bernoulli(probs=0.5 * one),
             'lap': Laplace(loc=zero, scale=one),
             'cauchy': Cauchy(loc=zero, scale=1),
             'uni': uni_dist,
             'logi': logistic_dist
         }
 
+    def get_rademacher(self, shape):
+        return 2 * (self.distros['ber'].sample(shape) - 0.5).to(self.device)
 
     def netG_from_layer_list(self):
         return
-
 
     def generate_levy_h_triu_indices(self, new_bm_dim: int):
         """Generates the indices for all objects required for generator
@@ -199,9 +201,10 @@ class PairNetGenerator(Generator):
         if len(self.noise_types) == 0:
             out = torch.randn((bsz, self.noise_size * bm_dim), dtype=torch.float, device=self.device)
             return out
+
         def get_single_dim_noise(bsz):
             dims_per_type = 2
-            num_gaussian_dims = self.noise_size - dims_per_type*len(self.noise_types)
+            num_gaussian_dims = self.noise_size - dims_per_type * len(self.noise_types)
             if num_gaussian_dims < 1:
                 raise ValueError("Too many noise types. At least one dim must be left for a gaussian")
             gauss = torch.randn((bsz, num_gaussian_dims), dtype=torch.float, device=self.device)
@@ -222,9 +225,9 @@ class PairNetGenerator(Generator):
     def forward(self, input):
         """
 
-        Args: 
+        Args:
             input (torch.Tensor): the Brownian increment
-        
+
         Returns:
             torch.Tensor: (BM || Levy area)
         """
@@ -235,15 +238,17 @@ class PairNetGenerator(Generator):
         # Generates space-time levy area and space-space levy area of brownian bridge
         h, b = self.generate_bb(bsz=bsz, new_bm_dim=new_bm_dim,
                                 concat_hb=False)
-        # Perform bridge-flipping
-        if self.do_bridge_flipping:
-            r = self.get_rademacher((bsz, new_bm_dim)).squeeze()
-            levy = fast_flipping(bm, b, h, r_in=r, device=self.device)
-        else:
-            levy = Davie_gpu(bm, device=self.device, h_in=h, bb=b)
 
-        # Last rademacher will ensure all odd cross moments are zero
-        last_rademacher = self.get_rademacher((b.shape[0],))
+        # Perform bridge-flipping
+        if not self.do_bridge_flipping:
+            # Last rademacher will ensure odd moments of levy are zero
+            levy = Davie_gpu(bm, device=self.device, h_in=h, bb=b)
+            last_rademacher = self.get_rademacher((b.shape[0],))
+        else:
+            r = self.get_rademacher((bsz, new_bm_dim + 1)).squeeze()
+            r_for_flipping, last_rademacher = torch.split(r, [new_bm_dim, 1], dim=1)
+            levy = fast_flipping(bm, b, h, r_in=r_for_flipping, device=self.device)
+
         levy = torch.mul(last_rademacher, levy)
         out = torch.cat((bm, levy), dim=1)
         return out
@@ -293,8 +298,8 @@ class PairNetGenerator(Generator):
             return torch.cat((h, b), dim=1)
         else:
             return h, b
-        
-    def generate_MC_samples(self, M: int, N:int, dt: float):
+
+    def generate_MC_samples(self, M: int, N: int, dt: float):
         """generates samples with shape M x N x (bm_dim + levy_dim) over the time interval dt
 
         Args:
@@ -304,11 +309,10 @@ class PairNetGenerator(Generator):
         """
         self.eval()
         with torch.no_grad():
-            bm = torch.randn((M*N, self.bm_dim), dtype=torch.float, device=self.device)
+            bm = torch.randn((M * N, self.bm_dim), dtype=torch.float, device=self.device)
             out = self.forward(bm).detach()
             out[:, :self.bm_dim] *= sqrt(dt)
             out[:, self.bm_dim:] *= dt
             out = out.view(M, N, -1)
         self.train()
         return out
-            
