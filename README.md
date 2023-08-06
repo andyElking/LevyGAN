@@ -12,7 +12,7 @@ To install the required packages, run the following:
 pip install -r requirements.txt
 ```
 
-In order to use the provided testing functionality, please also download the Levy area sample dataset from the link below and copy them into LevyGAN/samples/.
+In order to use the provided testing functionality, please download the Levy area sample dataset from the link below and copy them into LevyGAN/samples/.
 
 https://drive.google.com/drive/folders/1GZ0MY_9BMeg6Tkcu5BrHeENDBn1TGPjM?usp=sharing
 
