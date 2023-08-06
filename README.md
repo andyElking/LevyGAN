@@ -38,7 +38,7 @@ The trained model will be saved under the  directory `/model_saves` and the grap
 
 ## Model evaluation
 
-Once the model is trained, use the function `model_evalution()` in `run.py` to assess the model performance. The function takes as the input the directory where the model is saved and the generator configuration. The returning object is a dictionary that contains the different test metrics listed in the article. 
+Once the model is trained, use the function `model_evalution()` in `run.py` to assess the model performance. The function takes as the input the directory where the model is saved and the generator configuration. The returning object is a dictionary that contains the different test metrics listed in the article. In order to use this functionality, Levy area samples have to be downloaded from the drive link above. Alternatively, the user may generate their own sample datasets using the Julia-language script in classical_sample_generator.jl.
 
 ## Multilevel Monte Carlo
 
