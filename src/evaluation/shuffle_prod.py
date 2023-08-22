@@ -1,4 +1,3 @@
-import signatory
 import torch
 import math
 import itertools
