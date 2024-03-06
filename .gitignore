@@ -8,3 +8,5 @@ model_saves/
 .idea/
 
 graphs/
+
+levygan_venv/
