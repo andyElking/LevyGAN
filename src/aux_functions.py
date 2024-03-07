@@ -277,55 +277,35 @@ def mom4_gpu(bm_dim: int, batch_size: int, bm_in: torch.Tensor = None, k_in: tor
     ksi = ber * uni + (1 - ber) * rademacher
     gen_rad.record()
 
-    if bm_dim >= 6:
-        # ========= New approach =========
-        C_plus_c: torch.Tensor = C + c
-        C_plus_c_trsp = (3 / 28) * C_plus_c.unsqueeze(1)
-        C_plus_c = C_plus_c.unsqueeze(2)
-        sigma_matrix = torch.bmm(C_plus_c, C_plus_c_trsp)
-        sigma_event.record()
-        squared_K = (144 / 28) * squared_K
-        sigma_matrix = sigma_matrix + squared_K.unsqueeze(1) + squared_K.unsqueeze(2)
-        sigma_matrix = torch.sqrt(sigma_matrix)
-        sigma2_event.record()
+    # ========= New approach =========
+    C_plus_c: torch.Tensor = C + c
+    C_plus_c_trsp = (3 / 28) * C_plus_c.unsqueeze(1)
+    C_plus_c = C_plus_c.unsqueeze(2)
+    sigma_matrix = torch.bmm(C_plus_c, C_plus_c_trsp)
+    sigma_event.record()
+    squared_K = (144 / 28) * squared_K
+    sigma_matrix = sigma_matrix + squared_K.unsqueeze(1) + squared_K.unsqueeze(2)
+    sigma_matrix = torch.sqrt(sigma_matrix)
+    sigma2_event.record()
 
-        h_unsqeezed = h.unsqueeze(1)
+    h_unsqeezed = h.unsqueeze(1)
 
-        bmh = torch.bmm(bm.unsqueeze(2), h_unsqeezed)
-        bmh = (bmh.permute(0, 2, 1) - bmh)
-        bmh_event.record()
+    bmh = torch.bmm(bm.unsqueeze(2), h_unsqeezed)
+    bmh = (bmh.permute(0, 2, 1) - bmh)
+    bmh_event.record()
 
-        kh = torch.bmm(k.unsqueeze(2), h_unsqeezed)
-        kh = kh - kh.permute(0, 2, 1)
-        bmh = bmh + 12 * kh
-        kh_event.record()
+    kh = torch.bmm(k.unsqueeze(2), h_unsqeezed)
+    kh = kh - kh.permute(0, 2, 1)
+    bmh = bmh + 12 * kh
+    kh_event.record()
 
-        indices = torch.triu_indices(bm_dim, bm_dim, offset=1, device=device)
-        bmh = bmh[:, indices[0], indices[1]]
-        tilde_a = ksi * (sigma_matrix[:, indices[0], indices[1]])
-        index_select_event.record()
+    indices = torch.triu_indices(bm_dim, bm_dim, offset=1, device=device)
+    bmh = bmh[:, indices[0], indices[1]]
+    tilde_a = ksi * (sigma_matrix[:, indices[0], indices[1]])
+    index_select_event.record()
 
-        levy_out = tilde_a + bmh
-        out = torch.cat((bm, levy_out), dim=1)
-
-    else:
-        # ========== Old approach ==========
-        # create the sigma RV
-        def sigma(i: int, j: int):
-            return torch.sqrt(3 / 28 * (C[:, i] + c) * (C[:, j] + c) + 144 / 28 * (squared_K[:, i] + squared_K[:, j]))
-
-        idx = 0
-        for j in range(bm_dim):
-            for l in range(j + 1, bm_dim):
-                sig = sigma(j, l)
-                # now calculate a from ksi and sigma (but store a in ksi)
-                ksi[:, idx] *= sig
-                # calculate the whole thing
-                ksi[:, idx] += h[:, j] * bm[:, l] - bm[:, j] * h[:, l] + 12 * (
-                        k[:, j] * h[:, l] - h[:, j] * k[:, l])
-                idx += 1
-        levy_out = ksi
-        out = torch.cat((bm, levy_out), dim=1)
+    levy_out = tilde_a + bmh
+    out = torch.cat((bm, levy_out), dim=1)
 
     out_cat_event.record()
     torch.cuda.synchronize()
@@ -476,14 +456,19 @@ def fourth_moment_errors(input_samples: np.ndarray, true_moments: torch.Tensor,
     fake_moments = fourth_moments(input_samples)
     diff = true_moments - fake_moments
     if loss_type == 'mean_abs':
-        out = torch.abs(diff).mean()
+        return torch.abs(diff).mean()
     elif loss_type == 'RMS':
-        out = torch.sqrt(torch.mean(torch.pow(diff, exponent=2)))
+        return torch.sqrt(torch.mean(torch.pow(diff, exponent=2)))
     elif loss_type == 'max':
-        out = torch.max(torch.abs(diff))
+        return torch.max(torch.abs(diff))
+    elif loss_type == 'all':
+        abs = torch.abs(diff)
+        max = torch.max(abs)
+        rms = torch.sqrt(torch.mean(torch.pow(diff, exponent=2)))
+        mean = abs.mean()
+        return max, rms, mean
     else:
-        raise ValueError("loss type should be 'mean_abs' or 'max' or 'RMS'")
-    return out
+        raise ValueError("loss type should be 'mean_abs' or 'max' or 'RMS' or 'all'")
 
 
 def make_pretty(errs, decimal_places=5):
