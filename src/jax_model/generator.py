@@ -1,9 +1,11 @@
 from functools import partial
+from typing import Optional
 
 import numpy as np
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+from jax import Array
 from numpy.testing import assert_array_almost_equal
 import equinox as eqx
 
@@ -20,8 +22,6 @@ def vector_to_matrix(vector, triu_indices, n):
     matrix = matrix.at[triu_indices[1], triu_indices[0]].set(-vector)
     return matrix
 
-key = jr.PRNGKey(0)
-
 
 def make_layers(key, noise_size, hidden_size, num_layers):
     keys = jr.split(key, num_layers)
@@ -35,15 +35,16 @@ def make_layers(key, noise_size, hidden_size, num_layers):
 
 class Net(eqx.Module):
     layers: list
+    noise_size: int = eqx.field(static=True)
 
     def __init__(self, layers):
         self.layers = layers
+        self.noise_size = layers[0].in_features // 2 - 1
 
-    def __call__(self, input):
-        x = input
+    def __call__(self, x: Array):
         for layer in self.layers[:-1]:
             x = jax.nn.relu(layer(x))
-        return input, self.layers[-1](x)
+        return self.layers[-1](x)
 
 
 @partial(jax.vmap, in_axes=(0, 0, 0, 0, 0, None))
@@ -62,6 +63,17 @@ def bridge_flipping(w, hh, bb, rad, rad_0, triu_indices):
 
 
 def arrange_pairnet_inputs(hh, noise, triu_indices):
+    """Arrange inputs for the pairnet.
+
+    **Arguments:**
+        - `hh`: jax.Array of shape `(..., n)`
+        - `noise`: jax.Array of shape `(..., n, noise_size)`
+        - `triu_indices`: tuple of two jax.Array of shape `(triu_len,)`
+            where `triu_len = n * (n - 1) // 2`
+
+    **Returns:**
+        `jax.Array` of shape `(..., triu_len, 2*(noise_size+1))`
+        """
     # noise: (..., n, noise_size)
     n = hh.shape[-1]
     len_triu = n * (n - 1) // 2
@@ -73,3 +85,37 @@ def arrange_pairnet_inputs(hh, noise, triu_indices):
     hh_noise1 = hh_noise[..., triu_indices[0], :]
     hh_noise2 = hh_noise[..., triu_indices[1], :]
     return jnp.concatenate((hh_noise1, hh_noise2), axis=-1)
+
+
+@partial(jax.jit, static_argnames=['noise_size'])
+def generate_samples(key, w, hh: Optional[Array], net: Net, triu_indices, noise_size):
+    num_samples = w.shape[0]
+    bm_dim = w.shape[1]
+    triu_len = bm_dim * (bm_dim - 1) // 2
+    if hh is None:
+        key_noise, key_rad_0, key_rad, key_hh = jr.split(key, 4)
+        hh = jr.normal(key_hh, shape=(num_samples, bm_dim), dtype=w.dtype)
+    else:
+        key_noise, key_rad_0, key_rad = jr.split(key, 3)
+
+    assert w.shape == hh.shape == (num_samples, bm_dim)
+    assert net.noise_size == noise_size
+    assert triu_indices[0].shape == triu_indices[1].shape == (triu_len,)
+
+    noise = jr.normal(key_noise, shape=(num_samples, bm_dim, noise_size), dtype=w.dtype)
+    inputs = arrange_pairnet_inputs(hh, noise, triu_indices)  # (num_samples, triu_len, 2*(noise_size+1))
+    vec_net = jax.jit(jax.vmap(net, in_axes=(0, 1), out_axes=(0, 1)))
+    bb_unsqueezed = vec_net(inputs)  # (num_samples, triu_len, 1)
+    bb = jnp.squeeze(bb_unsqueezed, axis=-1)  # (num_samples, triu_len)
+    rad_0 = jr.rademacher(key_rad_0, shape=(num_samples, 1), dtype=w.dtype)
+    rad = jr.rademacher(key_rad, shape=(num_samples, bm_dim), dtype=w.dtype)
+    la = bridge_flipping(w, hh, bb, rad, rad_0, triu_indices)  # Levy area
+    return w, hh, la
+
+
+def init_inputs(key, num_samples, bm_dim):
+    key_w, key_hh = jr.split(key, 2)
+    w = jr.normal(key_w, shape=(num_samples, bm_dim), dtype=jnp.float64)
+    hh = jr.normal(key_hh, shape=(num_samples, bm_dim), dtype=jnp.float64)
+    triu_indices = jnp.triu_indices(bm_dim, k=1)
+    return w, hh, triu_indices
