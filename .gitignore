@@ -10,3 +10,5 @@ model_saves/
 graphs/
 
 levygan_venv/
+
+!src/jax_model/stuff.ipynb
