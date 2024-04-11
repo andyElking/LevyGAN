@@ -1,10 +1,36 @@
+samples/
 model_saves/
 *.ipynb
+*.json
 # Byte-compiled / optimized / DLL files
 **/__pycache__
 *.py[cod]
 *.pkl
+*.npy
 
 .idea/
-
+.vscode/
 graphs/
+
+useful_commands.txt
+
+gpu_tryout/
+tryout.py
+havok_graphs/
+
+precisions.py
+
+pickles/
+
+misc_ipynb/
+
+!good_model_saves/**/*.ipynb
+
+!tryout_andy.ipynb
+!jax_src/jax_net_timing.ipynb
+!jax_src/train_trial.ipynb
+!jax_src/MC_example.ipynb
+!jax_src/sst/sst_train_trial.ipynb
+!jax_src/sst/IGBM_simulation.ipynb
+
+!timing_tests.ipynb

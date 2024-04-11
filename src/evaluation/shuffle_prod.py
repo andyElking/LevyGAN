@@ -5,7 +5,7 @@ import functools
 import numpy as np
 from sympy.utilities.iterables import multiset_permutations
 
-'''
+"""
 stream_dim = time-length of the path
 batch_dim = batch_size
 channel_dim = dimension of the path
@@ -14,7 +14,7 @@ channel_dim = dimension of the path
 Every member in the tensor algebra is structured as an array of tensors, corresponding to the i-th level.
 Every tensor are two dimensional (batch_dim, channel_dim).
 Batch_dim is the same for all levels while channel is exponentially increasing
-'''
+"""
 
 """
 --------------------- Utility Functions --------------------- 
@@ -27,7 +27,7 @@ def total_len_algebra(dim: int, level: int) -> int:
     """
     if dim == 1:
         return level
-    return int(dim * (dim ** level - 1) / (dim - 1)) + 1
+    return int(dim * (dim**level - 1) / (dim - 1)) + 1
 
 
 def delta_coordinate_helper(dim: int, level: int) -> list:
@@ -36,7 +36,9 @@ def delta_coordinate_helper(dim: int, level: int) -> list:
     this helps one to find the corresponding coordinate in tensor of a given word
     """
     if level == 0:
-        words = [(),]
+        words = [
+            (),
+        ]
         return words
     letters = [i for i in range(dim)]
     words = [i for i in itertools.product(letters, repeat=level)]
@@ -61,7 +63,7 @@ def algebra_coordinate_calculator(word: tuple, dim: int, restricted=False) -> in
     index = 0
     for i, n in zip(word, [j for j in range(len(word) - 1, -1, -1)]):
         assert i < dim, "Element not in the tensor"
-        index += (i + 1) * (dim ** n) - restricted * (dim ** n)
+        index += (i + 1) * (dim**n) - restricted * (dim**n)
     if restricted:
         return index
     return index
@@ -74,7 +76,7 @@ def algebra_level_calculator(sublevel: int, dim: int, level: int):
     assert sublevel <= level
     idx_start = 0
     idx_end = 1
-    for i in range(1,sublevel+1):
+    for i in range(1, sublevel + 1):
         idx_start = idx_end
         idx_end = idx_start + dim**i
     return idx_start, idx_end
@@ -99,7 +101,7 @@ def inv_transformer(sig, dim: int, level: int) -> list:
     assert sig.size(-1) == length, "Dimensions do not match"
     res = []
     index = 0
-    for i in range(0,level):
+    for i in range(0, level):
         index += dim**i
         res.append(index)
     return list(torch.tensor_split(sig, res, 1))
@@ -120,12 +122,11 @@ def structure_checker(sig, dim: int, level: int):
 def mult_inner(tensor_at_level: torch.Tensor, arg1: list, arg2: list, level_index: int):
     for j in range(level_index, -1, -1):
         k = level_index - j
-        out_view = tensor_at_level.view(arg1[j].size(-2),
-                                        arg1[j].size(-1),
-                                        arg2[k].size(-1))
+        out_view = tensor_at_level.view(
+            arg1[j].size(-2), arg1[j].size(-1), arg2[k].size(-1)
+        )
         # print(out_view.shape)
-        out_view.addcmul_(arg2[k].unsqueeze(-2),
-                          arg1[j].unsqueeze(-1))
+        out_view.addcmul_(arg2[k].unsqueeze(-2), arg1[j].unsqueeze(-1))
     return
 
 
@@ -165,18 +166,21 @@ def substraction(sig1: list, sig2: list):
     return
 
 
-def tensor_exp(logsig, dim: int, level: int, output_format = "graded"):
+def tensor_exp(logsig, dim: int, level: int, output_format="graded"):
     """
     This function calculates the Tensor exponential of a log signature
     graded: if the input has the graded structure
     """
-    assert output_format in ["graded", "tensor"], "Unknown parameter, only graded/tensor are supported."
+    assert output_format in [
+        "graded",
+        "tensor",
+    ], "Unknown parameter, only graded/tensor are supported."
     logsig = structure_checker(logsig, dim, level)
-    assert torch.all(logsig[0][:,0] == 0), "Input is not a logsignature"
+    assert torch.all(logsig[0][:, 0] == 0), "Input is not a logsignature"
     input_channel_size = len(logsig) - 1
     temp = [sublevel.clone() for sublevel in logsig]
     res = [sublevel.clone() for sublevel in logsig]
-    res[0][:,0] = 1
+    res[0][:, 0] = 1
     for i in range(2, input_channel_size + 1):
         temp = mult(logsig, temp)
         coeff = 1 / math.factorial(i)
@@ -189,23 +193,26 @@ def tensor_exp(logsig, dim: int, level: int, output_format = "graded"):
         return transformer(res)
 
 
-def tensor_log(sig, dim: int, level: int, output_format = "graded"):
+def tensor_log(sig, dim: int, level: int, output_format="graded"):
     """
     This function calculates the Tensor exponential of a log signature
     graded: if the input has the graded structure
     """
-    assert output_format in ["graded", "tensor"], "Unknown parameter, only graded/tensor are supported."
+    assert output_format in [
+        "graded",
+        "tensor",
+    ], "Unknown parameter, only graded/tensor are supported."
     sig = sig.clone()
     sig = structure_checker(sig, dim, level)
-    assert torch.all(sig[0][:,0] == 1), "Input is not signature"
-    sig[0][:,0] = 0 # Convert it to 1 + t
+    assert torch.all(sig[0][:, 0] == 1), "Input is not signature"
+    sig[0][:, 0] = 0  # Convert it to 1 + t
     # input_channel_size = sig[1].size(-1)
     input_channel_size = len(sig) - 1
     temp = [sublevel.clone() for sublevel in sig]
     res = [sublevel.clone() for sublevel in sig]
     for i in range(2, input_channel_size + 1):
         temp = mult(sig, temp)
-        coeff = (-1)**(i-1) / i
+        coeff = (-1) ** (i - 1) / i
         ith_power = [coeff * ilevel for ilevel in temp]
         addition(res, ith_power)
 
@@ -219,8 +226,8 @@ def lie_product(sig1: list, sig2: list) -> list:
     """
     [X, Y] = XY - YX
     """
-    assert torch.all(sig2[0][:,0] == 0), "Input is not logsignature"
-    assert torch.all(sig1[0][:,0] == 0), "Input is not logsignature"
+    assert torch.all(sig2[0][:, 0] == 0), "Input is not logsignature"
+    assert torch.all(sig1[0][:, 0] == 0), "Input is not logsignature"
     XY = mult(sig1, sig2)
     YX = mult(sig2, sig1)
     res = [XY[i] - YX[i] for i in range(len(sig1))]
@@ -271,14 +278,24 @@ def d_exp(base, dim: int, level: int):
     return d_exp_X
 
 
-def triangular_matrix_addition(matrix: torch.Tensor, submatrix: torch.Tensor, dim: int, level: int, row_level: int, col_level: int):
+def triangular_matrix_addition(
+    matrix: torch.Tensor,
+    submatrix: torch.Tensor,
+    dim: int,
+    level: int,
+    row_level: int,
+    col_level: int,
+):
     """
     Plug the submatrix into the original matrix to construct the upper triangular matrix
     """
     row_start, row_end = algebra_level_calculator(row_level, dim, level)
     col_start, col_end = algebra_level_calculator(col_level, dim, level)
-    assert submatrix.shape[1] == row_end-row_start and submatrix.shape[2] == col_end-col_start, "Dimensions do not agree."
-    matrix[:,row_start: row_end, col_start: col_end] += submatrix
+    assert (
+        submatrix.shape[1] == row_end - row_start
+        and submatrix.shape[2] == col_end - col_start
+    ), "Dimensions do not agree."
+    matrix[:, row_start:row_end, col_start:col_end] += submatrix
     return
 
 
@@ -289,14 +306,26 @@ def ad_X_transposed(base, dim: int, level: int) -> torch.Tensor:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     base = structure_checker(base, dim, level)
     total_len = total_len_algebra(dim, level)
-    res = torch.zeros(total_len, total_len).unsqueeze(0).repeat(base[0].shape[0],1,1).to(device)
+    res = (
+        torch.zeros(total_len, total_len)
+        .unsqueeze(0)
+        .repeat(base[0].shape[0], 1, 1)
+        .to(device)
+    )
     for col_level in range(level, -1, -1):
-        for row_level in range(col_level-1, -1, -1):
+        for row_level in range(col_level - 1, -1, -1):
             # One has to instantiate a new tensor in order to do kron, there are memory issues with pytorch if one does not instantiate
-            temp_base = torch.empty((base[col_level - row_level].shape[0], 1, base[col_level - row_level].shape[1])).to(device)
+            temp_base = torch.empty(
+                (
+                    base[col_level - row_level].shape[0],
+                    1,
+                    base[col_level - row_level].shape[1],
+                )
+            ).to(device)
             temp_base[:, 0, :] = base[col_level - row_level]
-            submatrix = torch.kron(temp_base, torch.eye(dim ** row_level).unsqueeze(0).to(device)) \
-                        - torch.kron(torch.eye(dim ** row_level).unsqueeze(0).to(device), temp_base)
+            submatrix = torch.kron(
+                temp_base, torch.eye(dim**row_level).unsqueeze(0).to(device)
+            ) - torch.kron(torch.eye(dim**row_level).unsqueeze(0).to(device), temp_base)
             triangular_matrix_addition(res, submatrix, dim, level, row_level, col_level)
     return res
 
@@ -309,12 +338,12 @@ def d_exp_transposed(base, dim: int, level: int) -> torch.Tensor:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     base = structure_checker(base, dim, level)
     total_len = total_len_algebra(dim, level)
-    res = torch.eye(total_len).unsqueeze(0).repeat(base[0].shape[0],1,1).to(device)
+    res = torch.eye(total_len).unsqueeze(0).repeat(base[0].shape[0], 1, 1).to(device)
     ad_X_T = ad_X_transposed(base, dim, level)
-    temp = torch.eye(total_len).unsqueeze(0).repeat(base[0].shape[0],1,1).to(device)
+    temp = torch.eye(total_len).unsqueeze(0).repeat(base[0].shape[0], 1, 1).to(device)
     for ilevel in range(1, level + 1):
         temp = torch.matmul(temp, ad_X_T)
-        coeff = ((-1)**ilevel)/(math.factorial(ilevel+1))
+        coeff = ((-1) ** ilevel) / (math.factorial(ilevel + 1))
         res += coeff * temp
     return res
 
@@ -326,15 +355,27 @@ def left_mult_transposed(base, dim: int, level: int) -> torch.Tensor:
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     base = structure_checker(base, dim, level)
     total_len = total_len_algebra(dim, level)
-    res = torch.zeros(total_len, total_len).unsqueeze(0).repeat(base[0].shape[0],1,1).to(device)
+    res = (
+        torch.zeros(total_len, total_len)
+        .unsqueeze(0)
+        .repeat(base[0].shape[0], 1, 1)
+        .to(device)
+    )
     for col_level in range(level, -1, -1):
         for row_level in range(col_level, -1, -1):
             # One has to instantiate a new tensor in order to do kron, there are memory issues with pytorch if one does not instantiate
-            temp_base = torch.empty((base[col_level - row_level].shape[0], 1, base[col_level - row_level].shape[1])).to(device)
+            temp_base = torch.empty(
+                (
+                    base[col_level - row_level].shape[0],
+                    1,
+                    base[col_level - row_level].shape[1],
+                )
+            ).to(device)
             temp_base[:, 0, :] = base[col_level - row_level]
-            submatrix = torch.kron(temp_base, torch.eye(dim ** row_level).to(device))
+            submatrix = torch.kron(temp_base, torch.eye(dim**row_level).to(device))
             triangular_matrix_addition(res, submatrix, dim, level, row_level, col_level)
     return res
+
 
 """
 --------------------- Another way of implementing pi1 --------------------- 
@@ -356,7 +397,7 @@ def shuffle_prod_word(word1: tuple, word2: tuple):
         np.place(out_, 1 - mask, word1)
         np.place(out_, mask, word2)
         res.append(out_.copy())
-    return np.array(res, dtype='int16')
+    return np.array(res, dtype="int16")
 
 
 def shuffle_prod_words(word1: tuple, words: tuple):
@@ -366,9 +407,9 @@ def shuffle_prod_words(word1: tuple, words: tuple):
     res = []
     for word2 in words:
         res.append(shuffle_prod_word(word1, word2))
-    res = np.array(res, dtype='int16')
+    res = np.array(res, dtype="int16")
     res = res.reshape(-1, res.shape[2])
-    return np.array(res, dtype='int16')
+    return np.array(res, dtype="int16")
 
 
 def shuffle_prod_n_words(words: tuple):
@@ -393,8 +434,12 @@ def word_split_permutation(word: tuple, n: int):
 
     def local_recur(breaks, n):
         if n == 1:
-            breaks_start = [0, ] + breaks
-            breaks_end = breaks + [length, ]
+            breaks_start = [
+                0,
+            ] + breaks
+            breaks_end = breaks + [
+                length,
+            ]
             temp = []
             for i, j in zip(breaks_start, breaks_end):
                 temp.append(word[i:j])
@@ -435,7 +480,7 @@ def pi1_of_word_permutation(word: tuple, dim: int, level: int):
                 shuffled_product = shuffle_prod_n_words(sub_splitted)
                 # Count all the elements corresponding to the original word, this is the scalar product of two polynomials
                 counts = np.count_nonzero(np.all(shuffled_product == word, axis=1))
-                counts *= ((-1) ** (i - 1) / i)
+                counts *= (-1) ** (i - 1) / i
                 res[index] += counts
     return res
 
@@ -470,13 +515,13 @@ def pi1_matrix(dim: int, level: int) -> list:
     res = []
     idx_start = 0
     words = algebra_coordinate_helper(dim, level)
-    for ilevel in range(0, level+1):
+    for ilevel in range(0, level + 1):
         level_len = dim**ilevel
         temp_res = torch.zeros(level_len, level_len, device=device)
-        level_words = words[idx_start:level_len+idx_start]
+        level_words = words[idx_start : level_len + idx_start]
         for index, word in zip([i for i in range((len(level_words)))], level_words):
             pi1_word = pi1_of_word_permutation(word, dim, level)
-            temp_res[index] = pi1_word[idx_start:level_len+idx_start].clone()
+            temp_res[index] = pi1_word[idx_start : level_len + idx_start].clone()
         idx_start += level_len
         res.append(temp_res.t())
     return res
@@ -538,7 +583,9 @@ def lyndon_basis(dim: int, level: int):
         for firstLev in range(1, ilevel):
             for x in out[firstLev - 1]:
                 for y in out[ilevel - firstLev - 1]:
-                    if less_expression_lyndon(x, y) and (firstLev == 1 or not less_expression_lyndon(x[1], y)):
+                    if less_expression_lyndon(x, y) and (
+                        firstLev == 1 or not less_expression_lyndon(x[1], y)
+                    ):
                         out[-1].append((x, y))
                         n += 1
         out[-1].sort(key=KeyFromLess(less_expression_lyndon))
@@ -626,7 +673,11 @@ def extract_nested_tuples(nested_tuple):
 
     def _recursive_extract(t):
         for item in t:
-            if isinstance(item, tuple) and len(item) == 2 and all(isinstance(x, int) for x in item):
+            if (
+                isinstance(item, tuple)
+                and len(item) == 2
+                and all(isinstance(x, int) for x in item)
+            ):
                 result.append(item)
             elif isinstance(item, tuple):
                 _recursive_extract(item)
@@ -641,8 +692,8 @@ def levy_expand(word):
     Transform [i,j] = 1/2 * (i,j) - 1/2 * (j,i)
     """
     if len(word) == 2:
-        ij = [(word[0],word[1]), 1/2]
-        minus_ji = [(word[1],word[0]), -1/2]
+        ij = [(word[0], word[1]), 1 / 2]
+        minus_ji = [(word[1], word[0]), -1 / 2]
         return [ij, minus_ji]
     else:
         return [word, 1]
@@ -655,7 +706,7 @@ def signed_two_product(word_1, word_2):
     :param word_2: [tuple of indices, sign]
     :return: [tuple of indices, sign]
     """
-    res = [extract_nested_tuples((word_1[0],word_2[0])), word_1[1]*word_2[1]]
+    res = [extract_nested_tuples((word_1[0], word_2[0])), word_1[1] * word_2[1]]
     return res
 
 
@@ -694,8 +745,8 @@ def get_levy_words(bm_dim):
     """
     word_list = []
     for i in range(bm_dim):
-        for j in range(i+1, bm_dim):
-            word_list.append((i,j))
+        for j in range(i + 1, bm_dim):
+            word_list.append((i, j))
     return word_list
 
 
@@ -709,11 +760,19 @@ def nth_moments(bm_dim, n):
 
     # Compute the expected signature upto degree 8
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    sig_length = total_len_algebra(bm_dim, 2*n)
+    sig_length = total_len_algebra(bm_dim, 2 * n)
     bm_sig = torch.zeros(1, sig_length).to(device)
     for i in range(bm_dim):
-        bm_sig[0][algebra_coordinate_calculator((i, i,), bm_dim)] = 0.5
-    expected_sig = transformer(tensor_exp(bm_sig, bm_dim, 2*n))
+        bm_sig[0][
+            algebra_coordinate_calculator(
+                (
+                    i,
+                    i,
+                ),
+                bm_dim,
+            )
+        ] = 0.5
+    expected_sig = transformer(tensor_exp(bm_sig, bm_dim, 2 * n))
 
     res = []
     # Fourth moment of L_{i_1,i_2}, L_{j_1,j_2}, L_{k_1,k_2}, L_{l_1,l_2}
@@ -732,7 +791,9 @@ def nth_moments(bm_dim, n):
             shuffle_result = 0
             # Find the corresponding value in expected signature of BM, perform the linear combination
             for word_2n in elements_in_degree_2n:
-                shuffle_result += expected_sig[0, algebra_coordinate_calculator(word_2n, bm_dim)]
+                shuffle_result += expected_sig[
+                    0, algebra_coordinate_calculator(word_2n, bm_dim)
+                ]
             shuffle_result *= sign
             n_comb_moment += shuffle_result
         res.append(n_comb_moment.item())
@@ -740,5 +801,5 @@ def nth_moments(bm_dim, n):
     return nth_moments
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(nth_moments(4, 4))

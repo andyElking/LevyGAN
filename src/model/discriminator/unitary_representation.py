@@ -4,6 +4,7 @@ from torch import nn
 import math
 from functools import partial
 
+
 def matrix_power_two_batch(A, k):
     orig_size = A.size()
     A, k = A.flatten(0, -3), k.flatten()
@@ -16,8 +17,7 @@ def matrix_power_two_batch(A, k):
     processed = count[nonzero[0]]
     for exp in nonzero[1:]:
         new, last = exp - last, exp
-        A[idx[processed:]] = torch.matrix_power(
-            A[idx[processed:]], 2 ** new.item())
+        A[idx[processed:]] = torch.matrix_power(A[idx[processed:]], 2 ** new.item())
         processed += count[exp]
     return A.reshape(orig_size)
 
@@ -34,8 +34,7 @@ def rescaled_matrix_exp(f, A):
     s = torch.ceil(torch.log2(normA)).long()
     s = normA.new_zeros(normA.size(), dtype=torch.long)
     s[more] = torch.ceil(torch.log2(normA[more])).long()
-    A_1 = torch.pow(
-        0.5, s.float()).unsqueeze_(-1).unsqueeze_(-1).expand_as(A) * A
+    A_1 = torch.pow(0.5, s.float()).unsqueeze_(-1).unsqueeze_(-1).expand_as(A) * A
     # print(A_1.shape)
     return matrix_power_two_batch(f(A_1), s)
 
@@ -74,9 +73,9 @@ def unitary_lie_init_(tensor: torch.tensor, init_=None):
         torch.nn.init.uniform_(diag, -math.pi, math.pi)
     else:
         init_(diag)
-    diag = diag.imag*torch.tensor([1j], device=tensor.device)
+    diag = diag.imag * torch.tensor([1j], device=tensor.device)
     # set values for upper trianguler matrix
-    off_diag = tensor.new(tensorial_size+(2*n, n))
+    off_diag = tensor.new(tensorial_size + (2 * n, n))
     if init_ is None:
         torch.nn.init.uniform_(off_diag, -math.pi, math.pi)
 
@@ -85,23 +84,25 @@ def unitary_lie_init_(tensor: torch.tensor, init_=None):
 
     upper_tri_real = torch.triu(off_diag[..., :n, :n], 1).real.cfloat()
     upper_tri_complex = torch.triu(
-        off_diag[..., n:, :n], 1).imag.cfloat()*torch.tensor([1j], device=tensor.device)
+        off_diag[..., n:, :n], 1
+    ).imag.cfloat() * torch.tensor([1j], device=tensor.device)
 
-    real_part = (upper_tri_real - upper_tri_real.transpose(-2, -1)
-                 )/torch.tensor([2], device=tensor.device).cfloat().sqrt()
-    complex_part = (upper_tri_complex + upper_tri_complex.transpose(-2, -1)
-                    )/torch.tensor([2], device=tensor.device).cfloat().sqrt()
+    real_part = (upper_tri_real - upper_tri_real.transpose(-2, -1)) / torch.tensor(
+        [2], device=tensor.device
+    ).cfloat().sqrt()
+    complex_part = (
+        upper_tri_complex + upper_tri_complex.transpose(-2, -1)
+    ) / torch.tensor([2], device=tensor.device).cfloat().sqrt()
 
     with torch.no_grad():
         # First non-central diagonal
-        x = real_part+complex_part+torch.diag_embed(diag)
+        x = real_part + complex_part + torch.diag_embed(diag)
         if unitary(n).in_lie_algebra(x):
             tensor = tensor.cfloat()
             tensor.copy_(x)
             return tensor
         else:
-            raise ValueError(
-                "initialize not in Lie")
+            raise ValueError("initialize not in Lie")
 
 
 class unitary(nn.Module):
@@ -115,9 +116,9 @@ class unitary(nn.Module):
         super().__init__()
         self.size = size
 
-    @ staticmethod
+    @staticmethod
     def frame(X: torch.tensor) -> torch.tensor:
-        """ parametrise real symplectic lie algebra from the gneal linear matrix X
+        """parametrise real symplectic lie algebra from the gneal linear matrix X
 
         Args:
             X (torch.tensor): (...,2n,2n)
@@ -126,22 +127,25 @@ class unitary(nn.Module):
         Returns:
             torch.tensor: (...,2n,2n)
         """
-        X = (X - torch.conj(X.transpose(-2, -1)))/2
+        X = (X - torch.conj(X.transpose(-2, -1))) / 2
 
         return X
 
     def forward(self, X: torch.tensor) -> torch.tensor:
         if len(X.size()) < 2:
-            raise ValueError('weights has dimension < 2')
+            raise ValueError("weights has dimension < 2")
         if X.size(-2) != X.size(-1):
-            raise ValueError('not squared matrix')
+            raise ValueError("not squared matrix")
         return self.frame(X)
 
-    @ staticmethod
+    @staticmethod
     def in_lie_algebra(X, eps=1e-5):
-        return (X.dim() >= 2
-                and X.size(-2) == X.size(-1)
-                and torch.allclose(torch.conj(X.transpose(-2, -1)), -X, atol=eps))
+        return (
+            X.dim() >= 2
+            and X.size(-2) == X.size(-1)
+            and torch.allclose(torch.conj(X.transpose(-2, -1)), -X, atol=eps)
+        )
+
 
 class projection(nn.Module):
     def __init__(self, input_size, hidden_size, channels=1, init_range=1, **kwargs):
@@ -155,8 +159,9 @@ class projection(nn.Module):
         """
         self.__dict__.update(kwargs)
 
-        A = torch.empty(input_size, channels, hidden_size,
-                        hidden_size, dtype=torch.cfloat)
+        A = torch.empty(
+            input_size, channels, hidden_size, hidden_size, dtype=torch.cfloat
+        )
         self.channels = channels
         super(projection, self).__init__()
         # self.size = hidden_size
@@ -174,12 +179,12 @@ class projection(nn.Module):
     def reset_parameters(self):
         unitary_lie_init_(self.A, partial(nn.init.normal_, std=1))
 
-
     def M_initialize(self, A):
-        init_range = np.linspace(0, 10, self.channels+1)
+        init_range = np.linspace(0, 10, self.channels + 1)
         for i in range(self.channels):
-            A[:, i] = unitary_lie_init_(A[:, i], partial(nn.init.uniform_,
-                                                         a=init_range[i], b=init_range[i+1]))
+            A[:, i] = unitary_lie_init_(
+                A[:, i], partial(nn.init.uniform_, a=init_range[i], b=init_range[i + 1])
+            )
         return A
 
     # @jit.script_method
@@ -200,15 +205,17 @@ class projection(nn.Module):
         return rescaled_matrix_exp(self.triv, AX)
 
 
-
 class development_layer(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, channels: int = 1, init_range=1):
+    def __init__(
+        self, input_size: int, hidden_size: int, channels: int = 1, init_range=1
+    ):
         super(development_layer, self).__init__()
         self.input_size = input_size
         self.channels = channels
         self.hidden_size = hidden_size
         self.projection = projection(
-            input_size, hidden_size, channels, init_range=init_range)
+            input_size, hidden_size, channels, init_range=init_range
+        )
         self.complex = True
 
     # @jit.script_method
@@ -226,6 +233,8 @@ class development_layer(nn.Module):
 
         N, C = input_path.shape
 
-        M_dX = self.projection(input_path).reshape(N, self.channels, self.hidden_size, self.hidden_size)
+        M_dX = self.projection(input_path).reshape(
+            N, self.channels, self.hidden_size, self.hidden_size
+        )
 
         return M_dX
