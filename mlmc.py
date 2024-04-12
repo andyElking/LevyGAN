@@ -6,17 +6,17 @@ from scipy import integrate
 import torch
 import torch.nn as nn
 from src.model.Generator import PairNetGenerator
-from src.aux_functions import MC_chen_combine, mom4_gpu, Davie_gpu_all, Davie_mom2, rademacher_GPU_dim2, rademacher_GPU_dim2_var
+from src.aux_functions import MC_chen_combine, mom4_gpu, Davie_gpu_all, rademacher_GPU_dim2, rademacher_GPU_dim2_var
 from math import sqrt
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 """We compare various MLMC methods: Milstein, Milstein Antithetic, and Strang log-ODE with three different fake levy areas
 """
 
-# Plot colorus
+# Plot colours
 colors = ["#60ceaf",
 "#de76bc",
 "#81cb61",
@@ -31,7 +31,7 @@ colors = ["#60ceaf",
 
 #####################################
 
-gen_config = gen_config = {
+gen_config = {
             'use_pair_net': True,
             'bm_dim': 2,
             'noise_size': 4,  # size of latent space
